@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: storage-client
+  namespace: local
+  author: Cluster maintainers
+  description: "Mount cluster shared filesystems on compute nodes."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+        - "26.04"
+
+dependencies: []

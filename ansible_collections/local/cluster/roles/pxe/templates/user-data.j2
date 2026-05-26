@@ -1,0 +1,119 @@
+#cloud-config
+# {{ ansible_managed }}
+# Minimal autoinstall for compute nodes. The goal is to land a generic
+# Ubuntu box with SSH + the cluster admin user + the controller's SSH
+# key, so Ansible can take over for everything else.
+#
+# Anything you might want to *change* later (packages, mounts, services)
+# belongs in an Ansible role, NOT here. Reinstalling a compute node is
+# expensive; re-running Ansible is cheap.
+
+autoinstall:
+  version: 1
+
+  # No interactive prompts. Compute nodes install headlessly.
+  interactive-sections: []
+
+  locale: "en_US.UTF-8"
+
+  keyboard:
+    layout: us
+
+  source:
+    search_drivers: true
+    id: ubuntu-server
+
+  proxy: null
+
+  # Wipe any prior signatures BEFORE Subiquity probes. Same rationale as
+  # the head-node USB autoinstall — avoids "filesystem probe timed out"
+  # on a recycled compute node.
+  early-commands:
+    - |
+      vgchange -an || true
+      for vg in $(vgs --noheadings -o vg_name 2>/dev/null); do
+          vgremove -ff "$vg" || true
+      done
+      for pv in $(pvs --noheadings -o pv_name 2>/dev/null); do
+          pvremove -ff "$pv" || true
+      done
+      mdadm --stop --scan 2>/dev/null || true
+      for d in /sys/block/*/removable; do
+          name=$(basename "$(dirname "$d")")
+          [ "$(cat "$d")" = "0" ] || continue
+          case "$name" in loop*|sr*|ram*|zram*|dm-*) continue ;; esac
+          wipefs -a "/dev/$name" || true
+      done
+
+  # Storage: simplest layout that works on compute nodes with one or
+  # more SSDs. Picks the largest SSD, lvm-on-disk, one big root LV.
+  # No separate /home — homes come from the head node over NFS.
+  storage:
+    layout:
+      name: lvm
+      match:
+        ssd: true
+        size: largest
+
+  # No identity prompt; user is created via cloud-init below so we can
+  # also drop the SSH key in one shot.
+  identity:
+    hostname: compute-pending     # overwritten in late-commands below
+    realname: "Cluster Admin"
+    username: clusteradmin
+    # Hash for password "changeme" — placeholder; key auth is what's used.
+    # Generate a real one with: mkpasswd --method=SHA-512
+    password: "$6$rounds=4096$saltsalt$D4kNi5qZi6ofYWqz1u5TyZqQUO0jR5HfV5O3KGvKxK7vT0vXmXSfL3hKqLvDhP0aP1bN6.cF1d8oG5y2eN0e3."
+
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      # The cluster admin's public key. Replace with your real key in
+      # group_vars/all.yml as `cluster_admin_pubkey`, then redeploy the
+      # PXE role to regenerate this file.
+      - "{{ cluster_admin_pubkey | default('ssh-ed25519 AAAA...PLACEHOLDER admin@laptop') }}"
+
+  drivers:
+    install: true
+
+  packages:
+    - openssh-server
+    - python3       # Ansible needs it on first contact
+    - sudo
+
+  timezone: "{{ cluster_timezone }}"
+
+  updates: security
+
+  late-commands:
+
+    # Hostname derived from MAC address so each compute node gets a
+    # unique, deterministic name. Pattern: c-<last 6 hex of primary MAC>.
+    # Replace with a per-MAC map if you have one.
+    - |
+      mac=$(cat /sys/class/net/$(ip -o link show | awk -F': ' '$2 !~ "lo|vir|wl" {print $2; exit}')/address)
+      tag=$(echo "$mac" | tr -d ':' | tail -c 7)
+      echo "c-${tag}" > /target/etc/hostname
+      sed -i "s/compute-pending/c-${tag}/g" /target/etc/hosts || true
+
+    # Default new users created on this node into /ihome (will be the
+    # NFS-mounted directory once storage-client runs).
+    - |
+      mkdir -p /target/ihome
+      sed -i -E 's|^[#[:space:]]*HOME=.*|HOME=/ihome|' /target/etc/default/useradd
+      grep -q '^HOME=/ihome' /target/etc/default/useradd || \
+          echo 'HOME=/ihome' >> /target/etc/default/useradd
+      if [ -f /target/etc/adduser.conf ]; then
+          sed -i -E 's|^[#[:space:]]*DHOME=.*|DHOME=/ihome|' /target/etc/adduser.conf
+          grep -q '^DHOME=/ihome' /target/etc/adduser.conf || \
+              echo 'DHOME=/ihome' >> /target/etc/adduser.conf
+      fi
+
+    # Passwordless sudo for the cluster admin so Ansible can take over
+    # without `--ask-become-pass`.
+    - |
+      echo 'clusteradmin ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/90-clusteradmin
+      chmod 0440 /target/etc/sudoers.d/90-clusteradmin
+
+  shutdown: reboot

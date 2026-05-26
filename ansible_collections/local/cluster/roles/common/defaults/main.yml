@@ -1,0 +1,30 @@
+---
+# Base packages every cluster machine gets.
+common_packages:
+  - build-essential
+  - curl
+  - wget
+  - git
+  - rsync
+  - tmux
+  - htop
+  - tree
+  - vim
+  - nano
+  - net-tools
+  - iproute2
+  - python3
+  - python3-pip
+  - python3-venv
+  - software-properties-common
+  - unattended-upgrades
+  - chrony
+  - ufw
+
+# Firewall: opened ports differ by host group, set in group_vars.
+common_firewall_enabled: true
+common_firewall_default_incoming: deny
+common_firewall_default_outgoing: allow
+# Allow SSH from anywhere by default. Tighten in group_vars if needed.
+common_firewall_rules:
+  - { rule: allow, port: "22", proto: tcp, comment: "SSH" }

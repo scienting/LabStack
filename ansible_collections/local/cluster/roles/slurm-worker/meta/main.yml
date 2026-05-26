@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: slurm-worker
+  namespace: local
+  author: Cluster maintainers
+  description: "Slurm compute-node daemon."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+        - "26.04"
+
+dependencies: []

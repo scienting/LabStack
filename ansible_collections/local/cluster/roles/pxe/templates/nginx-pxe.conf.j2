@@ -1,0 +1,22 @@
+{{ ansible_managed | comment }}
+
+server {
+    listen 80 default_server;
+    server_name _;
+
+    root {{ pxe_http_root }};
+    autoindex on;
+
+    # The Ubuntu live ISO is ~3GB; tune sendfile + tcp_nopush for it.
+    sendfile        on;
+    tcp_nopush      on;
+    tcp_nodelay     on;
+
+    # Allow byte-range requests (curl --continue-at, casper resume).
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    access_log /var/log/nginx/pxe.access.log;
+    error_log  /var/log/nginx/pxe.error.log;
+}

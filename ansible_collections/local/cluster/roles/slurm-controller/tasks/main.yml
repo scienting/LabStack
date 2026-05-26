@@ -1,0 +1,7 @@
+---
+# Stub. See roles/slurm-controller/README.md for the implementation plan.
+- name: "slurm-controller role is a stub"
+  ansible.builtin.debug:
+    msg: |
+      The slurm-controller role is a stub and does nothing yet.
+      See roles/slurm-controller/README.md for what should go in it.

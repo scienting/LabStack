@@ -1,0 +1,7 @@
+---
+# Stub. See roles/storage-client/README.md for the implementation plan.
+- name: "storage-client role is a stub"
+  ansible.builtin.debug:
+    msg: |
+      The storage-client role is a stub and does nothing yet.
+      See roles/storage-client/README.md for what should go in it.

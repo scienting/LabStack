@@ -1,0 +1,30 @@
+{{ ansible_managed | comment('#') }}
+# GRUB menu served to PXE-booting compute nodes.
+
+set default=0
+set timeout=5
+
+menuentry "Ubuntu {{ pxe_ubuntu_release }} — Autoinstall (compute node)" {
+    set gfxpayload=keep
+    linux  (http,{{ cluster_head_ip }})/ubuntu-{{ pxe_ubuntu_release }}/vmlinuz \
+           ip=dhcp \
+           url=http://{{ cluster_head_ip }}/ubuntu-{{ pxe_ubuntu_release }}.iso \
+           autoinstall \
+           ds=nocloud-net\;s=http://{{ cluster_head_ip }}/{{ pxe_autoinstall_subdir }}/ \
+           {{ pxe_kernel_extra_args }} \
+           ---
+    initrd (http,{{ cluster_head_ip }})/ubuntu-{{ pxe_ubuntu_release }}/initrd
+}
+
+menuentry "Ubuntu {{ pxe_ubuntu_release }} — Interactive install" {
+    set gfxpayload=keep
+    linux  (http,{{ cluster_head_ip }})/ubuntu-{{ pxe_ubuntu_release }}/vmlinuz \
+           ip=dhcp \
+           url=http://{{ cluster_head_ip }}/ubuntu-{{ pxe_ubuntu_release }}.iso \
+           ---
+    initrd (http,{{ cluster_head_ip }})/ubuntu-{{ pxe_ubuntu_release }}/initrd
+}
+
+menuentry "Boot from local disk" {
+    exit
+}

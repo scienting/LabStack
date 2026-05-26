@@ -1,0 +1,10 @@
+---
+# Entry point. Applies everything to everything in the inventory.
+# Consumed from a downstream private repo as:
+#     - import_playbook: local.cluster.site
+#
+# For more targeted runs use `local.cluster.head` / `local.cluster.compute`
+# directly, or pass --limit when invoking this one.
+
+- import_playbook: local.cluster.head
+- import_playbook: local.cluster.compute

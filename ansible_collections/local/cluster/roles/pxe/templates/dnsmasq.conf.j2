@@ -1,0 +1,41 @@
+{{ ansible_managed | comment }}
+# ProxyDHCP + TFTP configuration. Does NOT allocate IPs — listens for
+# DHCP broadcasts and only sets the PXE-related fields, so the existing
+# IT-managed DHCP server still hands out leases.
+
+# Only listen on the management interface. Critical: do NOT enable
+# regular DHCP, do NOT bind to other interfaces.
+interface={{ pxe_interface }}
+bind-interfaces
+
+# No DNS; we're a boot service, not a resolver.
+port=0
+
+# ---- ProxyDHCP ----
+# The 'proxy' keyword is what makes this dnsmasq instance a proxy and not
+# a regular DHCP server. We declare the subnet so dnsmasq knows which
+# broadcasts to answer.
+dhcp-range={{ cluster_mgmt_subnet | ansible.utils.ipaddr('network') }},proxy,{{ cluster_mgmt_subnet | ansible.utils.ipaddr('netmask') }}
+
+# Distinguish PXE client architecture. PXE option 93 (client-arch):
+#   0  = BIOS x86
+#   7  = UEFI x86-64
+#   9  = EFI BC
+# We only handle UEFI x86-64 (option 93 = 7) per the cluster spec.
+dhcp-match=set:efi-x86_64,option:client-arch,7
+
+# Hand UEFI clients grubnetx64. Optionally serve shimx64 first if you
+# want secure boot — change the filename below to shimx64.efi.signed.
+dhcp-boot=tag:efi-x86_64,grubnetx64.efi.signed,{{ cluster_head_host }},{{ cluster_head_ip }}
+
+# ProxyDHCP needs a 'pxe-service' line to satisfy the PXE spec.
+pxe-service=tag:efi-x86_64,X86-64_EFI,"Network Boot",grubnetx64.efi.signed
+
+# ---- TFTP ----
+enable-tftp
+tftp-root={{ pxe_tftp_root }}
+# Don't be chatty.
+tftp-no-blocksize
+
+# ---- Logging ----
+log-dhcp

@@ -1,0 +1,42 @@
+---
+# Ansible collection metadata. Built with `ansible-galaxy collection build`,
+# installed via `ansible-galaxy collection install -r requirements.yml` in
+# the private repo that consumes this one.
+
+namespace: local
+name: cluster
+version: 0.1.0
+readme: README.md
+authors:
+  - Cluster maintainers
+
+description: >
+  Reusable Ansible roles and playbooks for provisioning an on-prem research cluster:
+  PXE/autoinstall, NFS, Slurm (configless), SSSD/LDAP, Spack.
+
+license:
+  - MIT
+
+tags:
+  - infrastructure
+  - hpc
+  - cluster
+  - slurm
+  - pxe
+  - autoinstall
+
+dependencies:
+  community.general: ">=8.0.0"
+  ansible.posix:     ">=1.5.0"
+  ansible.utils:     ">=4.0.0"
+
+repository: https://example.com/your-org/cluster-public
+# documentation: https://...
+# homepage: https://...
+# issues: https://...
+
+build_ignore:
+  - "*.tar.gz"
+  - ".git"
+  - ".github"
+  - tests/

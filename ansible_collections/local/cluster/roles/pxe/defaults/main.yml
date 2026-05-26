@@ -1,0 +1,33 @@
+---
+# PXE-boot service for compute nodes. The head node runs ProxyDHCP via
+# dnsmasq (does NOT assign IPs and serves TFTP + HTTP for the boot loader,
+# kernel, initrd, ISO, and autoinstall configs.
+
+# NIC facing the management subnet. Override in group_vars/head.yml.
+pxe_interface: eth0
+
+# Filesystem layout on the head node.
+pxe_tftp_root: /srv/tftp
+pxe_http_root: /srv/http
+
+# Ubuntu release to serve.
+pxe_ubuntu_release: "26.04"
+pxe_ubuntu_arch: amd64
+pxe_iso_url: "https://releases.ubuntu.com/{{ pxe_ubuntu_release }}/ubuntu-{{ pxe_ubuntu_release }}-live-server-{{ pxe_ubuntu_arch }}.iso"
+
+# Compute-node autoinstall config. Copied to the HTTP root so booting
+# nodes can fetch it. Generated from templates/user-data.j2.
+pxe_autoinstall_subdir: autoinstall/compute
+
+# Extra kernel parameters appended to the GRUB linux line. Useful for
+# serial console etc. The boot URL and autoinstall ds= are appended
+# automatically.
+pxe_kernel_extra_args: ""
+
+# Open these ports in ufw on the head node. ProxyDHCP listens on 67/udp
+# (broadcast), 4011/udp (PXE service); TFTP is 69/udp; HTTP is 80/tcp.
+pxe_firewall_rules:
+  - { rule: allow, port: "67", proto: udp, comment: "dnsmasq ProxyDHCP" }
+  - { rule: allow, port: "4011", proto: udp, comment: "dnsmasq PXE" }
+  - { rule: allow, port: "69", proto: udp, comment: "TFTP" }
+  - { rule: allow, port: "80", proto: tcp, comment: "PXE HTTP" }

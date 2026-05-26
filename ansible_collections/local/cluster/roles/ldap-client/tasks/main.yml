@@ -1,0 +1,7 @@
+---
+# Stub. See roles/ldap-client/README.md for the implementation plan.
+- name: "ldap-client role is a stub"
+  ansible.builtin.debug:
+    msg: |
+      The ldap-client role is a stub and does nothing yet.
+      See roles/ldap-client/README.md for what should go in it.

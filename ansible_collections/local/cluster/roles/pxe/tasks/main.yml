@@ -1,0 +1,159 @@
+---
+- name: Install packages for PXE service
+  ansible.builtin.apt:
+    name:
+      - dnsmasq            # ProxyDHCP + TFTP in one daemon
+      - nginx              # HTTP for kernel/initrd/ISO/autoinstall
+      - grub-efi-amd64-signed  # signed GRUB EFI binary to TFTP
+      - shim-signed        # signed shim, in case nodes want secure boot
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create TFTP root and HTTP root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ pxe_tftp_root }}"
+    - "{{ pxe_tftp_root }}/grub"
+    - "{{ pxe_http_root }}"
+    - "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}"
+    - "{{ pxe_http_root }}/{{ pxe_autoinstall_subdir }}"
+
+- name: Copy signed GRUB EFI binary into TFTP root
+  ansible.builtin.copy:
+    src: /usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed
+    dest: "{{ pxe_tftp_root }}/grubnetx64.efi.signed"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy signed shim (for nodes that want secure boot)
+  ansible.builtin.copy:
+    src: /usr/lib/shim/shimx64.efi.signed
+    dest: "{{ pxe_tftp_root }}/shimx64.efi.signed"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  failed_when: false
+
+- name: Render GRUB menu config
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: "{{ pxe_tftp_root }}/grub/grub.cfg"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check if ISO already present
+  ansible.builtin.stat:
+    path: "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}.iso"
+  register: pxe_iso_stat
+
+- name: Fetch Ubuntu live-server ISO
+  ansible.builtin.get_url:
+    url: "{{ pxe_iso_url }}"
+    dest: "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}.iso"
+    mode: "0644"
+    # Suppress redownload if already there.
+    force: false
+  when: not pxe_iso_stat.stat.exists
+
+- name: Extract kernel + initrd from ISO for direct GRUB boot
+  # Mount the ISO loop, copy out casper/vmlinuz + casper/initrd. The kernel
+  # cmdline pulls the full ISO over HTTP at boot time, but we still need
+  # to TFTP the kernel + initrd to start the process.
+  ansible.builtin.shell: |
+    set -euo pipefail
+    mkdir -p /mnt/_pxe_iso
+    mount -o loop,ro "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}.iso" /mnt/_pxe_iso
+    cp /mnt/_pxe_iso/casper/vmlinuz "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}/vmlinuz"
+    cp /mnt/_pxe_iso/casper/initrd  "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}/initrd"
+    umount /mnt/_pxe_iso
+    rmdir /mnt/_pxe_iso
+  args:
+    creates: "{{ pxe_http_root }}/ubuntu-{{ pxe_ubuntu_release }}/vmlinuz"
+
+- name: Render compute-node autoinstall user-data
+  ansible.builtin.template:
+    src: user-data.j2
+    dest: "{{ pxe_http_root }}/{{ pxe_autoinstall_subdir }}/user-data"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Drop empty meta-data (nocloud requires the file to exist)
+  ansible.builtin.copy:
+    dest: "{{ pxe_http_root }}/{{ pxe_autoinstall_subdir }}/meta-data"
+    content: "instance-id: cluster-compute\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Disable any stock dnsmasq config that might allocate IPs
+  ansible.builtin.file:
+    path: /etc/dnsmasq.d/{{ item }}
+    state: absent
+  loop:
+    - lxd.conf
+    - libvirt.conf
+  failed_when: false
+
+- name: Render dnsmasq ProxyDHCP config
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/pxe-proxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart dnsmasq
+
+- name: Enable dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    enabled: true
+    state: started
+
+- name: Render nginx vhost
+  ansible.builtin.template:
+    src: nginx-pxe.conf.j2
+    dest: /etc/nginx/sites-available/pxe.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable the PXE vhost
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/pxe.conf
+    dest: /etc/nginx/sites-enabled/pxe.conf
+    state: link
+  notify: Reload nginx
+
+- name: Disable the default nginx vhost
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Enable nginx
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Open PXE-related ports
+  community.general.ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ pxe_firewall_rules }}"
+  when: common_firewall_enabled | default(true)

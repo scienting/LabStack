@@ -1,0 +1,13 @@
+---
+- name: Configure head node
+  hosts: head
+  gather_facts: true
+  become: true
+  roles:
+    - local.cluster.common
+    - local.cluster.pxe
+    - local.cluster.storage-server
+    - local.cluster.ldap-server
+    - local.cluster.ldap-client    # head is also a client of its own directory
+    - local.cluster.slurm-controller
+    - local.cluster.spack

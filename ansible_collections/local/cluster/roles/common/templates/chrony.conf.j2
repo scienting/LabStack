@@ -1,0 +1,18 @@
+{{ ansible_managed | comment }}
+# Managed by Ansible (roles/common). Edit cluster_ntp_servers in group_vars.
+
+{% for srv in cluster_ntp_servers %}
+pool {{ srv }} iburst maxsources 4
+{% endfor %}
+
+# Allow chrony to step the clock on startup if off by more than 1s.
+makestep 1.0 3
+
+# Record drift to survive reboots cleanly.
+driftfile /var/lib/chrony/chrony.drift
+
+# Enable kernel sync of the real-time clock.
+rtcsync
+
+# Sane logging.
+logdir /var/log/chrony

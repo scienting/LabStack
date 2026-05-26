@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: ldap-client
+  namespace: local
+  author: Cluster maintainers
+  description: "SSSD-based LDAP client."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+        - "26.04"
+
+dependencies: []

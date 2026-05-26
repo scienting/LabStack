@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: storage-server
+  namespace: local
+  author: Cluster maintainers
+  description: "Cluster shared filesystems (NFS now, Gluster/Ceph later)."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+        - "26.04"
+
+dependencies: []

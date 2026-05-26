@@ -1,0 +1,56 @@
+---
+# First-contact bootstrap. Run this ONCE against a freshly-installed node,
+# before site.yml. It assumes the node has SSH open and the user from
+# inventory exists with a known password (the one set during autoinstall).
+#
+# Usage:
+#   ansible-playbook playbooks/bootstrap.yml --limit <host> --ask-pass --ask-become-pass
+#
+# After this completes successfully, you can run site.yml normally without
+# password prompts (key-based auth, passwordless sudo for the ansible user).
+
+- name: Bootstrap a new node for Ansible-driven management
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+
+    - name: Install python3 (Ansible needs it)
+      ansible.builtin.raw: |
+        if ! command -v python3 >/dev/null 2>&1; then
+            apt-get update && apt-get install -y python3
+        fi
+      changed_when: false
+
+    - name: Ensure apt cache is fresh
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install minimal toolset Ansible relies on
+      ansible.builtin.apt:
+        name:
+          - python3-apt
+          - aptitude
+          - sudo
+          - openssh-server
+        state: present
+
+    - name: Ensure ansible_user has passwordless sudo
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/90-{{ ansible_user }}"
+        content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+
+    - name: Authorize the controller's SSH key for ansible_user
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+
+    - name: Confirm host is reachable via key-based auth
+      ansible.builtin.ping:

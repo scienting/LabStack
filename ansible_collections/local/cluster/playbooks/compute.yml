@@ -1,0 +1,11 @@
+---
+- name: Configure compute nodes
+  hosts: compute
+  gather_facts: true
+  become: true
+  roles:
+    - local.cluster.common
+    - local.cluster.storage-client
+    - local.cluster.ldap-client
+    - local.cluster.slurm-worker
+    - local.cluster.spack
