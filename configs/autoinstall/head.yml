@@ -217,7 +217,7 @@ autoinstall:
     - nano
     - rsync
 
-  timezone: "US/Eastern"
+  timezone: "America/New_York"
 
   updates: all
 
