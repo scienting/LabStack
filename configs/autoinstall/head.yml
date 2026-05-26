@@ -248,4 +248,50 @@ autoinstall:
 
   updates: all
 
+  # Runs after curtin has installed the system. The new root is at /target,
+  # so anything we want in the installed system gets written there.
+  # `curtin in-target -- <cmd>` runs <cmd> chrooted into /target (use this
+  # for commands that need the installed system's binaries / package db).
+  late-commands:
+ 
+    # ---- SSH hardening ----
+    # Modern Ubuntu's sshd_config defaults to `PermitRootLogin prohibit-password`
+    # and reads drop-ins from /etc/ssh/sshd_config.d/. A drop-in is more durable
+    # than editing the main file: package updates won't clobber it.
+    - |
+      cat > /target/etc/ssh/sshd_config.d/10-hardening.conf <<'EOF'
+      # Managed by autoinstall. Edit and re-deploy via the head.yml.
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PermitEmptyPasswords no
+      X11Forwarding no
+      EOF
+      chmod 0644 /target/etc/ssh/sshd_config.d/10-hardening.conf
+ 
+    # ---- Default home location for future users ----
+    # The autoinstall `identity` user stays at /home/<admin>. This only
+    # affects users created later on the running system.
+    # Two files to keep in sync because Debian/Ubuntu has two tools:
+    #   useradd  (low-level)  reads /etc/default/useradd  -> HOME=
+    #   adduser  (Perl wrapper) reads /etc/adduser.conf    -> DHOME=
+    # If only one is changed, the other tool silently still uses /home.
+    - |
+      mkdir -p /target/ihome
+ 
+      # /etc/default/useradd
+      sed -i -E 's|^[#[:space:]]*HOME=.*|HOME=/ihome|' /target/etc/default/useradd
+ 
+      # /etc/adduser.conf
+      if [ -f /target/etc/adduser.conf ]; then
+          sed -i -E 's|^[#[:space:]]*DHOME=.*|DHOME=/ihome|' /target/etc/adduser.conf
+      fi
+ 
+    # ---- Unattended-upgrades sanity check ----
+    # Ubuntu Server enables unattended-upgrades by default with security-only
+    # policy, which is what we want. This just makes sure the service is
+    # enabled in the installed system in case future ISO defaults change.
+    - curtin in-target -- systemctl enable unattended-upgrades.service
+
   shutdown: reboot
