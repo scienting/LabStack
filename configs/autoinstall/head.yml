@@ -22,7 +22,34 @@ autoinstall:
 
   proxy: null
 
-  # For more information:
+  # Run BEFORE the storage probe. This avoids `probert` deadlocking on
+  # stale LVM/RAID/LUKS metadata from a prior install, which presents as
+  # "filesystem probe timed out" / "block probing failed" in the logs.
+  # See: https://bugs.launchpad.net/subiquity/+bug/2009141
+  #
+  # Edit DISK below to your actual target (e.g. /dev/nvme0n1, /dev/sda).
+  # `|| true` everywhere so a clean disk doesn't fail the install.
+  early-commands:
+    - |
+      # Tear down any auto-activated LVM so probert sees raw partitions.
+      vgchange -an || true
+      for vg in $(vgs --noheadings -o vg_name 2>/dev/null); do
+        vgremove -ff "$vg" || true
+      done
+      for pv in $(pvs --noheadings -o pv_name 2>/dev/null); do
+        pvremove -ff "$pv" || true
+      done
+      # Stop any md arrays too, just in case.
+      mdadm --stop --scan 2>/dev/null || true
+      # Wipe signatures from all non-removable disks that aren't the
+      # installer USB. Adjust the filter if you need to keep a disk.
+      for d in /sys/block/*/removable; do
+        name=$(basename "$(dirname "$d")")
+        [ "$(cat "$d")" = "0" ] || continue
+        case "$name" in loop*|sr*|ram*|zram*|dm-*) continue ;; esac
+        wipefs -a "/dev/$name" || true
+      done
+
   # https://canonical-subiquity.readthedocs-hosted.com/en/latest/reference/autoinstall-reference.html#storage
   # https://curtin.readthedocs.io/en/latest/topics/storage.html
   storage:
